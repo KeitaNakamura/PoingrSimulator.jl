@@ -1,0 +1,15 @@
+name = "PoingrSimulator"
+uuid = "01eb3d57-6371-4320-8e81-081701a85da1"
+authors = ["Keita Nakamura <keita.nakamura.1109@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+GeometricObjects = "f167b195-1c3d-409a-8dd6-02cc02a656c6"
+Poingr = "573615e8-489b-4e48-952b-fc194aa7573b"
+Tensorial = "98f94333-fa9f-48a9-ad80-1c66397b2b38"
+
+[compat]
+GeometricObjects = "0.3"
+Poingr = "0.12"
+Tensorial = "0.10"
+julia = "1.6"
