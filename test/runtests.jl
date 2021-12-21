@@ -12,7 +12,7 @@ const fix_results = false
 function check_results(inputtoml::String)
     @assert endswith(inputtoml, ".toml")
     testname = first(splitext(basename(inputtoml)))
-    @testset "$testname" begin
+    @testset "$(joinpath(basename(dirname(inputtoml)), basename(inputtoml)))" begin
         injection_file = joinpath(dirname(inputtoml), "injection.jl")
         if isfile(injection_file)
             PoingrSimulator.main(inputtoml, include(injection_file))
@@ -32,10 +32,7 @@ function check_results(inputtoml::String)
             for name in propertynames(output)
                 output_col = output[name]
                 history_col = history[name]
-                for i in 1:length(output_col)
-                    val = output_col[i]
-                    @test 0.98*val ≤ history_col[i] ≤ 1.02*val # ±2%
-                end
+                @test output_col ≈ history_col  rtol = 1e-3
             end
         end
     end

@@ -11,12 +11,11 @@ using Dates
 struct NodeState
     f::Vec{2, Float64}
     fc::Vec{2, Float64}
-    fc_nor::Vec{2, Float64}
-    w::Float64
+    d::Vec{2, Float64}
     m::Float64
     v::Vec{2, Float64}
     vᵣ::Vec{2, Float64}
-    w_rigidbody::Float64
+    m_contacted::Float64
     μ::Float64
 end
 
@@ -158,7 +157,7 @@ function main(proj_dir::AbstractString, INPUT::NamedTuple, Injection::Module)
     println("Particles: ", length(pointstate))
 
     t = 0.0
-    logger = Logger(0.0:INPUT.Output.interval:total_time; progress = INPUT.General.show_progress)
+    logger = Logger(0.0:INPUT.Output.interval:total_time; INPUT.General.show_progress)
     update!(logger, t)
     writeoutput(outputs, grid, pointstate, rigidbody, logindex(logger), rigidbody_center_0, t, INPUT, Injection)
     while !isfinised(logger, t)
@@ -210,7 +209,7 @@ function writeoutput(
                     vtk_grid(vtm, grid) do vtk
                         vtk["nodal force"] = vec(grid.state.f)
                         vtk["nodal contact force"] = vec(grid.state.fc)
-                        vtk["nodal contact force (normal)"] = vec(grid.state.fc_nor)
+                        vtk["nodal contact distance"] = vec(grid.state.d)
                         vtk["nodal friction"] = vec(grid.state.μ)
                     end
                 end
