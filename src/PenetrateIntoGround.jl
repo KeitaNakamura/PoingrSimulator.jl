@@ -48,7 +48,7 @@ function main(proj_dir::AbstractString, INPUT::NamedTuple, Injection::Module)
     @assert H ≤ ymax
 
     # RigidBody
-    rigidbody = GeometricObject(Polygon(Vec{2}.(INPUT.RigidBody.coordinates)))
+    rigidbody = GeometricObject(Polygon(Vec{2}.(INPUT.RigidBody.coordinates)...))
     rigidbody.m = Inf
     rigidbody.v = Vec(0.0, -INPUT.RigidBody.velocity)
 
@@ -102,8 +102,8 @@ function main(proj_dir::AbstractString, INPUT::NamedTuple, Injection::Module)
                                  0.0 σ_y 0.0
                                  0.0 0.0 σ_x]) |> symmetric
         pointstate.m[p] = ρ0 * pointstate.V[p]
-        if layer.friction_with_rigidbody isa Vector
-            pointstate.μ[p] = layer.friction_with_rigidbody
+        if layer.friction_with_rigidbody isa Tuple
+            pointstate.μ[p] = collect(layer.friction_with_rigidbody)
         else
             pointstate.μ[p] = [layer.friction_with_rigidbody]
         end
