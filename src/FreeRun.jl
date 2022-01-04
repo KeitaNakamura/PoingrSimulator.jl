@@ -1,6 +1,7 @@
 module FreeRun
 
 using PoingrSimulator
+using PoingrSimulator: Input
 using Poingr
 using GeometricObjects
 
@@ -33,7 +34,7 @@ struct PointState
     matindex::Int
 end
 
-function main(proj_dir::AbstractString, INPUT::NamedTuple, Injection::Module)
+function main(proj_dir::AbstractString, INPUT::Input{:Root}, Injection::Module)
 
     # General
     coordinate_system = INPUT.General.coordinate_system
@@ -81,6 +82,9 @@ function main(proj_dir::AbstractString, INPUT::NamedTuple, Injection::Module)
     end
     @. pointstate.b = Vec(0.0, -g)
 
+    # boundary contacts
+    boundary_contacts = PoingrSimulator.create_boundary_contacts(INPUT.BoundaryCondition)
+
     ################
     # Output files #
     ################
@@ -118,7 +122,7 @@ function main(proj_dir::AbstractString, INPUT::NamedTuple, Injection::Module)
         PoingrSimulator.P2G!(grid, pointstate, cache, dt)
         # PoingrSimulator.P2G_contact!(grid, pointstate, cache, dt, rigidbody, v_rigidbody, α, INPUT.Advanced.contact_penalty_parameter)
         for bd in eachboundary(grid)
-            @inbounds grid.state.v[bd.I] = boundary_velocity(grid.state.v[bd.I], bd.n, INPUT.BoundaryCondition)
+            @inbounds grid.state.v[bd.I] = boundary_velocity(grid.state.v[bd.I], bd.n, boundary_contacts)
         end
         PoingrSimulator.G2P!(pointstate, grid, cache, matmodels, dt)
 
@@ -140,7 +144,7 @@ function writeoutput(
         output_index::Int,
         # rigidbody_center_0::Vec,
         t::Real,
-        INPUT::NamedTuple,
+        INPUT::Input{:Root},
         Injection::Module,
     )
     if INPUT.Output.paraview
@@ -194,13 +198,12 @@ function writeoutput(
     end
 end
 
-create_contact(BoundaryCondition, side) = haskey(BoundaryCondition, side) ? Contact(:friction, BoundaryCondition[side]) : Contact(:slip)
-function boundary_velocity(v::Vec{2}, n::Vec{2}, BoundaryCondition)
+function boundary_velocity(v::Vec{2}, n::Vec{2}, boundary_contacts)
     n == Vec(-1,  0) && (side = :left)
     n == Vec( 1,  0) && (side = :right)
     n == Vec( 0, -1) && (side = :bottom)
     n == Vec( 0,  1) && (side = :top)
-    contact = create_contact(BoundaryCondition, side)
+    contact = boundary_contacts[side]
     v + contact(v, n)
 end
 
