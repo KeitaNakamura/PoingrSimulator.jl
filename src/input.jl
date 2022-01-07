@@ -19,7 +19,7 @@ Base.values(input::Input) = values(getfield(input, :fields))
 Base.merge(tup::NamedTuple, input::Input) = merge(tup, getfield(input, :fields))
 Base.show(io::IO, input::Input{name}) where {name} = print(io, "Input{:$name}", getfield(input, :fields))
 
-getoftype(input::Input, name::Symbol, default) = oftype(default, get(getfield(input, :fields), name, default))
+getoftype(input::Input, name::Symbol, default)::typeof(default) = oftype(default, get(getfield(input, :fields), name, default))
 
 ##############
 # Input TOML #
@@ -100,6 +100,11 @@ function preprocess_Material!(Material::Vector)
         if haskey(mat, "type")
             mat["type"] = eval(Meta.parse(mat["type"]))
         end
+        if haskey(mat, "friction_with_rigidbody")
+            coef = mat["friction_with_rigidbody"]
+            coef = convert(Float64, coef isa AbstractString ? eval(Meta.parse(coef)) : coef)
+            mat["friction_with_rigidbody"] = coef
+        end
     end
 end
 
@@ -147,16 +152,22 @@ function initialize_stress!(σₚ::AbstractVector, material::Input{:Material}, g
             σₚ[p] = Initialization.mean_stress * one(σₚ[p])
         end
     else
-        throw(ArgumentError("invalid initialization type, got $(condition.type)"))
+        throw(ArgumentError("invalid initialization type, got $(Initialization.type)"))
     end
 end
 
-# generate_pointstate
+# Since initializing pointstate is dependent on types of simulation,
+# `initialize!` phase should be given as argument.
+# This `initialize!` function is called on each material to perform
+# material-wise initialization.
+# After initialization, these `pointstate`s will be concatenated.
+# Then, if you have rigid bodies, the invalid points are removed.
 function Poingr.generate_pointstate(initialize!::Function, ::Type{PointState}, grid::Grid, INPUT::Input{:Root}) where {PointState}
+    # generate all pointstate first
     Material = INPUT.Material
     pointstates = map(1:length(Material)) do matindex
         material = Material[matindex]
-        pointstate′ = generate_pointstate(
+        pointstate′ = generate_pointstate( # call method in `Poingr`
             material.region,
             PointState,
             grid;
@@ -167,6 +178,21 @@ function Poingr.generate_pointstate(initialize!::Function, ::Type{PointState}, g
     end
     pointstate = first(pointstates)
     append!(pointstate, pointstates[2:end]...)
+
+    # remove invalid pointstate
+    α = getoftype(INPUT.Advanced, :contact_threshold_scale, 1.0)
+    haskey(INPUT, :RigidBody) && deleteat!(
+        pointstate,
+        findall(eachindex(pointstate)) do p
+            xₚ = pointstate.x[p]
+            rₚ = pointstate.r[p]
+            all(map(create_rigidbody, INPUT.RigidBody)) do rigidbody
+                # remove pointstate which is in rigidbody or is in contact with rigidbody
+                in(xₚ, rigidbody) || distance(rigidbody, xₚ, α * mean(rₚ)) !== nothing
+            end
+        end,
+    )
+
     pointstate
 end
 
@@ -184,6 +210,9 @@ function preprocess_RigidBody!(RigidBody::Dict)
     end
     if haskey(RigidBody, "control")
         if RigidBody["control"] === true
+            # If the rigid body is controled, `density` should be `Inf`
+            # to set `mass` into `Inf`.
+            # This is necessary for computing effective mass.
             RigidBody["density"] = Inf # TODO: warning?
         end
     end
@@ -195,6 +224,12 @@ end
 
 function create_rigidbody(::Type{Polygon}, params::Input{:RigidBody})
     rigidbody = GeometricObject(Polygon(Vec{2}.(params.coordinates)...))
+    initialize_rigidbody!(rigidbody, params)
+    rigidbody
+end
+
+function create_rigidbody(::Type{Circle}, params::Input{:RigidBody})
+    rigidbody = GeometricObject(Circle(Vec(params.center), params.radius))
     initialize_rigidbody!(rigidbody, params)
     rigidbody
 end
