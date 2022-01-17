@@ -11,9 +11,9 @@ show_progress = false
 
 [Output]
 interval = 0.09 # (sec)
-folder_name = "output.tmp"
+directory = "output.tmp"
 history = true
-serialize = true
+snapshots = true
 paraview = true
 paraview_grid = true
 copy_inputfile = true

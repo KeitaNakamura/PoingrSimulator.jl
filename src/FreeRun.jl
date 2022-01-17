@@ -39,7 +39,7 @@ function preprocess_input!(dict::Dict)
     get!(dict, "RigidBody", Ref(GeometricObject[]))
 end
 
-function main(proj_dir::AbstractString, INPUT::Input{:Root}, Injection::Module)
+function main(INPUT::Input{:Root})
 
     # General
     coordinate_system = INPUT.General.coordinate_system
@@ -77,13 +77,11 @@ function main(proj_dir::AbstractString, INPUT::Input{:Root}, Injection::Module)
     # Output files #
     ################
 
+    output_dir = INPUT.Output.directory
     outputs = Dict{String, Any}()
-    # output directory
-    output_dir = joinpath(proj_dir, INPUT.Output.folder_name)
-    outputs["output directory"] = output_dir
-    if INPUT.Output.serialize
-        outputs["serialized_data_file"] = joinpath(outputs["output directory"], "serialized_data.jld2")
-        jldopen(identity, outputs["serialized_data_file"], "w"; compress = true)
+    if INPUT.Output.snapshots
+        outputs["snapshots_file"] = joinpath(output_dir, "snapshots.jld2")
+        jldopen(identity, outputs["snapshots_file"], "w"; compress = true)
     end
     if INPUT.Output.paraview
         mkpath(joinpath(output_dir, "paraview"))
@@ -96,7 +94,7 @@ function main(proj_dir::AbstractString, INPUT::Input{:Root}, Injection::Module)
     t = 0.0
     logger = Logger(0.0:INPUT.Output.interval:total_time; INPUT.General.show_progress)
     update!(logger, t)
-    writeoutput(outputs, grid, pointstate, rigidbodies, logindex(logger), t, INPUT, Injection)
+    writeoutput(outputs, grid, pointstate, rigidbodies, logindex(logger), t, INPUT)
     while !isfinised(logger, t)
         dt = INPUT.Advanced.CFL * minimum(pointstate) do pt
             PoingrSimulator.timestep(matmodels[pt.matindex], pt, dx)
@@ -105,7 +103,7 @@ function main(proj_dir::AbstractString, INPUT::Input{:Root}, Injection::Module)
         update!(logger, t += dt)
         if islogpoint(logger)
             Poingr.reorder_pointstate!(pointstate, cache)
-            writeoutput(outputs, grid, pointstate, rigidbodies, logindex(logger), t, INPUT, Injection)
+            writeoutput(outputs, grid, pointstate, rigidbodies, logindex(logger), t, INPUT)
         end
     end
 end
@@ -118,7 +116,6 @@ function writeoutput(
         output_index::Int,
         t::Real,
         INPUT::Input{:Root},
-        Injection::Module,
     )
     if INPUT.Output.paraview
         compress = true
@@ -143,13 +140,13 @@ function writeoutput(
         end
     end
 
-    if INPUT.Output.serialize
-        jldopen(outputs["serialized_data_file"], "a"; compress = true) do file
+    if INPUT.Output.snapshots
+        jldopen(outputs["snapshots_file"], "a"; compress = true) do file
             file[string(output_index)] = (; pointstate, grid, rigidbodies, t)
         end
     end
 
-    if isdefined(Injection, :main_output)
+    if isdefined(INPUT.Injection, :main_output)
         args = (;
             grid,
             pointstate,
@@ -157,9 +154,8 @@ function writeoutput(
             INPUT,
             t,
             output_index,
-            output_dir = outputs["output directory"],
         )
-        Injection.main_output(args)
+        INPUT.Injection.main_output(args)
     end
 end
 
