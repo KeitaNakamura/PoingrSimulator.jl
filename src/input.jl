@@ -26,6 +26,7 @@ getoftype(input::Input, name::Symbol, default)::typeof(default) = oftype(default
 ##############
 
 _parse_input(name, x) = x
+_parse_input(name, x::Base.RefValue) = x[]
 _parse_input(name, x::Vector) = first(x) isa Dict ? _parse_input.(name, x) : (x...,) # try vector => tuple except for table
 _parse_input(name, x::Dict) = Input{name}(; (Symbol(key) => _parse_input(Symbol(key), value) for (key, value) in x)...)
 
@@ -34,6 +35,7 @@ function parse_input(x::Dict)
         preprocess! = Symbol(:preprocess_, section, :!)
         isdefined(@__MODULE__, preprocess!) && eval(preprocess!)(x[section])
     end
+    @eval $(Symbol(x["General"]["simulation"])).preprocess_input!($x)
     _parse_input(:Root, x)
 end
 
@@ -42,15 +44,15 @@ parse_inputstring(str::AbstractString) = parse_input(TOML.parse(str))
 
 
 # helper functions for preprocess
-function parse_convert(::Type{T}, str::String)::T where {T}
+function eval_convert(::Type{T}, str::String)::T where {T}
     convert(T, eval(Meta.parse(str)))
 end
-function parse_convert(::Type{T}, val)::T where {T}
+function eval_convert(::Type{T}, val)::T where {T}
     convert(T, val)
 end
-function ifhaskey_parse_convert!(::Type{T}, dict::Dict, name::String) where {T}
+function ifhaskey_eval_convert!(::Type{T}, dict::Dict, name::String) where {T}
     if haskey(dict, name)
-        dict[name] = parse_convert(T, dict[name])
+        dict[name] = eval_convert(T, dict[name])
     end
 end
 
@@ -82,8 +84,12 @@ function create_boundary_contacts(BoundaryCondition::Input{:BoundaryCondition})
     dict = Dict{Symbol, Contact}()
     for side in (:left, :right, :bottom, :top)
         if haskey(BoundaryCondition, side)
-            coef = parse_convert(Float64, BoundaryCondition[side])
-            contact = Contact(:friction, coef)
+            coef = eval_convert(Float64, BoundaryCondition[side]) # use `eval_convert` for "Inf"
+            if isinf(coef)
+                contact = Contact(:sticky)
+            else
+                contact = Contact(:friction, coef)
+            end
         else
             contact = Contact(:slip)
         end
@@ -107,9 +113,9 @@ const InputMaterial = Union{Input{:Material}, Input{:SoilLayer}}
 
 function preprocess_Material!(Material::Vector)
     for mat in Material
-        ifhaskey_parse_convert!(Function,               mat, "region")
-        ifhaskey_parse_convert!(Type{<: MaterialModel}, mat, "type")
-        ifhaskey_parse_convert!(Float64,                mat, "friction_with_rigidbody")
+        ifhaskey_eval_convert!(Function,               mat, "region")
+        ifhaskey_eval_convert!(Type{<: MaterialModel}, mat, "type")
+        ifhaskey_eval_convert!(Float64,                mat, "friction_with_rigidbody")
     end
 end
 
@@ -186,7 +192,7 @@ function Poingr.generate_pointstate(initialize!::Function, ::Type{PointState}, g
 
     # remove invalid pointstate
     α = getoftype(INPUT.Advanced, :contact_threshold_scale, 1.0)
-    haskey(INPUT, :RigidBody) && deleteat!(
+    !isempty(INPUT.RigidBody) && deleteat!(
         pointstate,
         findall(eachindex(pointstate)) do p
             xₚ = pointstate.x[p]
@@ -210,7 +216,7 @@ function preprocess_RigidBody!(RigidBody::Vector)
 end
 
 function preprocess_RigidBody!(RigidBody::Dict)
-    ifhaskey_parse_convert!(Type{<: Shape}, RigidBody, "type")
+    ifhaskey_eval_convert!(Type{<: Shape}, RigidBody, "type")
     if haskey(RigidBody, "control")
         if RigidBody["control"] === true
             # If the rigid body is controled, `density` should be `Inf`
