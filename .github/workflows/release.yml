@@ -47,7 +47,7 @@ jobs:
         run: echo ::set-output name=TAG::${GITHUB_REF/refs\/tags\//}
         shell: bash
       - name: Compile package
-        run: julia --proj=@. -e 'using Pkg; Pkg.add("PackageCompiler"); using PackageCompiler; create_app(".", "${{ env.packagename }} ${{ steps.get_tag.outputs.TAG }} (${{ runner.os }})", executables= ["simulation" => "main_simulation", "postprocess" => "main_postprocess"])'
+        run: julia --proj=@. -e 'using Pkg; Pkg.add("PackageCompiler"); using PackageCompiler; create_app(".", "${{ env.packagename }} ${{ steps.get_tag.outputs.TAG }} (${{ runner.os }})")'
         shell: bash
       - name: Zip build directory for Linux/MacOS
         if: runner.os == 'Linux' || runner.os == 'macOS'

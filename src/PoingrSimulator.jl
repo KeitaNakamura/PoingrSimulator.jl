@@ -15,6 +15,20 @@ include("dem.jl")
 include("PenetrateIntoGround.jl")
 include("FreeRun.jl")
 
+function julia_main()::Cint
+    if isempty(ARGS)
+        inputtoml = "input.toml"
+    else
+        inputtoml = ARGS[1]
+    end
+    try
+        main(inputtoml)
+    catch
+        Base.invokelatest(Base.display_error, Base.catch_stack())
+        return 1
+    end
+    return 0
+end
 
 function main(tomlfile::AbstractString)
     @assert isfile(tomlfile) && endswith(tomlfile, ".toml")
