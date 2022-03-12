@@ -1,7 +1,7 @@
 name: CompatHelper
 on:
   schedule:
-    - cron: 0 0 * * *
+    - cron: */10 * * * *
   workflow_dispatch:
 jobs:
   CompatHelper:
@@ -12,6 +12,7 @@ jobs:
           import Pkg
           ENV["JULIA_PKG_SERVER"] = ""
           Pkg.Registry.add("General")
+          Pkg.Registry.add(RegistrySpec(url = "https://github.com/KeitaNakamura/KeitaNakamuraRegistry.git"))
         shell: julia --color=yes {0}
       - name: "Install CompatHelper"
         run: |
