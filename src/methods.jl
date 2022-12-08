@@ -211,8 +211,10 @@ function P2G!(grid::Grid, pointstate::AbstractVector, cache::MPCache, dt::Real, 
     input.General.transfer.point_to_grid!(grid, pointstate, cache, dt)
 end
 
-function P2G_contact!(grid::Grid, pointstate::AbstractVector, cache::MPCache, dt::Real, rigidbody::GeometricObject, frictions, α::Real, ξ::Real)
-    mask = @. distance($Ref(rigidbody), pointstate.x, α * mean(pointstate.r)) !== nothing
+function P2G_contact!(grid::Grid, pointstate::AbstractVector, cache::MPCache{dim}, dt::Real, rigidbody::GeometricObject, frictions, α::Real, ξ::Real) where {dim}
+    allequal(x) = all(isequal(first(x)), x)
+    unique_only(x) = (@assert(allequal(x)); first(x))
+    mask = @. distance($Ref(rigidbody), pointstate.x, α * unique_only(pointstate.r)) !== nothing
     !any(mask) && return mask
     point_to_grid!((grid.state.d, grid.state.vᵣ, grid.state.μ, grid.state.m_contacted), cache, mask) do it, p, i
         @_inline_meta
@@ -239,7 +241,7 @@ function P2G_contact!(grid::Grid, pointstate::AbstractVector, cache::MPCache, dt
     @dot_threads grid.state.d /= grid.state.m
     @dot_threads grid.state.vᵣ /= grid.state.m_contacted
     @dot_threads grid.state.μ /= grid.state.m_contacted
-    @dot_threads grid.state.fc = compute_contact_force(grid.state.d, grid.state.vᵣ, grid.state.m′, dt, grid.state.μ, ξ, $(prod(gridsteps(grid))))
+    @dot_threads grid.state.fc = compute_contact_force(grid.state.d, grid.state.vᵣ, grid.state.m′, dt, grid.state.μ, ξ, $(unique_only(gridsteps(grid))^(dim-1)))
     @dot_threads grid.state.v += (grid.state.fc / grid.state.m) * dt
     mask
 end
